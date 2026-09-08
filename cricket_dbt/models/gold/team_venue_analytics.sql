@@ -9,7 +9,7 @@ select
     count(distinct iff(m.WINNER_TEAM_ID = t.TEAM_ID, m.MATCH_ID, null)) as WINS,
     sum(f.TOTAL_RUNS) as RUNS,
     sum(f.IS_WICKET) as WICKETS,
-    6.0 * sum(f.TOTAL_RUNS) / nullif(count(f.DELIVERY_ID),0) as RUN_RATE
+    6.0 * sum(f.TOTAL_RUNS) / nullif(sum(f.LEGAL_BALL),0) as RUN_RATE
 from {{ ref('fact_delivery') }} f
 join {{ ref('dim_match') }} m on m.SK_MATCH = f.SK_MATCH
 join {{ ref('dim_team') }} t on t.SK_TEAM = f.SK_BATTING_TEAM
