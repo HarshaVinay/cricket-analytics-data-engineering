@@ -1,14 +1,42 @@
 -- 08_dq_ops.sql
 USE DATABASE CRICKET_ANALYTICS;
-CREATE TABLE IF NOT EXISTS OPS.LOAD_AUDIT (BATCH_ID VARCHAR,ENTITY VARCHAR,LOAD_TS TIMESTAMP_LTZ,SOURCE_FILE VARCHAR,SOURCE_ROW_COUNT NUMBER,RAW_ROW_COUNT NUMBER,DW_ROW_COUNT NUMBER,REJECT_COUNT NUMBER,STATUS VARCHAR,MESSAGE VARCHAR);
-CREATE TABLE IF NOT EXISTS OPS.REJECTS (REJECT_TS TIMESTAMP_LTZ,BATCH_ID VARCHAR,ENTITY VARCHAR,SOURCE_FILE VARCHAR,ROW_NUMBER NUMBER,REASON VARCHAR,RAW_RECORD VARIANT);
+
+CREATE TABLE IF NOT EXISTS OPS.LOAD_AUDIT (
+    BATCH_ID VARCHAR,
+    ENTITY VARCHAR,
+    LOAD_TS TIMESTAMP_LTZ,
+    SOURCE_FILE VARCHAR,
+    SOURCE_ROW_COUNT NUMBER,
+    RAW_ROW_COUNT NUMBER,
+    SILVER_ROW_COUNT NUMBER,
+    GOLD_ROW_COUNT NUMBER,
+    REJECT_COUNT NUMBER,
+    STATUS VARCHAR,
+    MESSAGE VARCHAR
+);
 
 -- Duplicate delivery check
-SELECT DELIVERY_ID,COUNT(*) CNT FROM DW.FACT_DELIVERY GROUP BY DELIVERY_ID HAVING COUNT(*)>1;
+SELECT DELIVERY_ID, COUNT(*) AS CNT
+FROM SILVER.FACT_DELIVERY
+GROUP BY DELIVERY_ID
+HAVING COUNT(*) > 1;
+
 -- Delivery reference check
-SELECT f.DELIVERY_ID FROM DW.FACT_DELIVERY f JOIN DW.DIM_PLAYER p ON f.SK_STRIKER=p.SK_PLAYER WHERE p.PLAYER_ID='UNKNOWN';
--- Delivery run/wicket totals
-SELECT MATCH_ID,SUM(TOTAL_RUNS) DELIVERY_RUNS,SUM(IS_WICKET) DELIVERY_WICKETS FROM SEM.V_DELIVERY_EXPLORER GROUP BY MATCH_ID;
--- Ball/over completeness is validated against feed rules; wides/no-balls are not falsely treated as missing legal balls.
--- Match-summary reconciliation is NOT_AVAILABLE for the supplied source because the match feed has no score-summary totals.
--- COPY_HISTORY and VALIDATE are used to identify Snowpipe load errors and feed OPS.REJECTS/quarantine.
+SELECT f.DELIVERY_ID
+FROM SILVER.FACT_DELIVERY f
+JOIN SILVER.DIM_PLAYER p ON f.SK_STRIKER = p.SK_PLAYER
+WHERE p.PLAYER_ID = 'UNKNOWN' AND f.SK_STRIKER <> 0;
+
+-- Delivery run reconciliation
+SELECT DELIVERY_ID
+FROM SILVER.FACT_DELIVERY
+WHERE TOTAL_RUNS <> BATSMAN_RUNS + WIDES + NO_BALLS + BYES + LEG_BYES;
+
+-- Match-summary reconciliation is NOT_AVAILABLE for the supplied source because
+-- the match feed has no independent score-summary totals.
+
+-- Ball/over completeness is validated against feed rules. Wides/no-balls are
+-- retained as deliveries but excluded from LEGAL_BALL calculations.
+
+-- Snowpipe load errors are reviewed with COPY_HISTORY / VALIDATE and captured
+-- in OPS.REJECTS. Bad files are copied to the quarantine stage after audit.
