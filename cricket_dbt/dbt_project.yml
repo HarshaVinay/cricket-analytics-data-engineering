@@ -16,21 +16,18 @@ clean-targets:
 
 models:
   cricket_dbt:
-    staging:
+    bronze:
       +materialized: view
-      +schema: STAGING
-    dimensions:
+      +schema: BRONZE
+    silver:
       +materialized: table
-      +schema: DW
-    facts:
-      +materialized: table
-      +schema: DW
-    marts:
+      +schema: SILVER
+    gold:
       +materialized: table
       +schema: GOLD
 
 snapshots:
   cricket_dbt:
-    +target_schema: DW
+    +target_schema: SILVER
     +strategy: timestamp
     +updated_at: UPDATED_AT
