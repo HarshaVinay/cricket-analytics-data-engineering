@@ -43,12 +43,16 @@ left join {{ ref('dim_date') }} d on d.DATE_VALUE = m.MATCH_DATE
 left join {{ ref('dim_venue') }} v on v.SK_VENUE = m.SK_VENUE
 left join {{ ref('dim_team') }} bt on bt.TEAM_ID = coalesce(s.BATTING_TEAM_ID, 'UNKNOWN')
 left join {{ ref('dim_team') }} bw on bw.TEAM_ID = coalesce(s.BOWLING_TEAM_ID, 'UNKNOWN')
+
+-- Deliveries do not contain a player-version event timestamp. LOAD_TS is
+-- therefore used as the warehouse-effective timestamp for resolving the
+-- appropriate SCD2 player version.
 left join {{ ref('dim_player') }} sp on sp.PLAYER_ID = coalesce(s.STRIKER_PLAYER_ID, 'UNKNOWN')
-    and coalesce(s.UPDATED_AT, '9999-12-31') >= sp.EFF_START_TS
-    and coalesce(s.UPDATED_AT, '9999-12-31') < sp.EFF_END_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') >= sp.EFF_START_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') < sp.EFF_END_TS
 left join {{ ref('dim_player') }} np on np.PLAYER_ID = coalesce(s.NON_STRIKER_PLAYER_ID, 'UNKNOWN')
-    and coalesce(s.UPDATED_AT, '9999-12-31') >= np.EFF_START_TS
-    and coalesce(s.UPDATED_AT, '9999-12-31') < np.EFF_END_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') >= np.EFF_START_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') < np.EFF_END_TS
 left join {{ ref('dim_player') }} bp on bp.PLAYER_ID = coalesce(s.BOWLER_PLAYER_ID, 'UNKNOWN')
-    and coalesce(s.UPDATED_AT, '9999-12-31') >= bp.EFF_START_TS
-    and coalesce(s.UPDATED_AT, '9999-12-31') < bp.EFF_END_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') >= bp.EFF_START_TS
+    and coalesce(s.LOAD_TS, '9999-12-31') < bp.EFF_END_TS
