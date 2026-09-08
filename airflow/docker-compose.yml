@@ -5,6 +5,10 @@ services:
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+      SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD}
+      SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE:-ROLE_ETL}
     volumes:
       - ./dags:/opt/airflow/dags
       - ../cricket_dbt:/opt/airflow/cricket_dbt
