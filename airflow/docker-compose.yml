@@ -1,0 +1,13 @@
+services:
+  airflow:
+    build: .
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ../cricket_dbt:/opt/airflow/cricket_dbt
+    ports:
+      - "8080:8080"
+    command: standalone
