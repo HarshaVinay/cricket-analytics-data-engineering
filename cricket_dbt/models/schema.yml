@@ -15,8 +15,9 @@ models:
       - name: CURRENT_TEAM_ID
         tests:
           - relationships:
-              to: ref('br_cricket_teams')
-              field: TEAM_ID
+              arguments:
+                to: ref('br_cricket_teams')
+                field: TEAM_ID
 
   - name: br_cricket_matches
     description: Standardized match records from Snowflake RAW.
@@ -26,13 +27,15 @@ models:
       - name: TEAM_A_ID
         tests:
           - relationships:
-              to: ref('br_cricket_teams')
-              field: TEAM_ID
+              arguments:
+                to: ref('br_cricket_teams')
+                field: TEAM_ID
       - name: TEAM_B_ID
         tests:
           - relationships:
-              to: ref('br_cricket_teams')
-              field: TEAM_ID
+              arguments:
+                to: ref('br_cricket_teams')
+                field: TEAM_ID
 
   - name: br_cricket_deliveries
     description: Standardized ball-by-ball delivery records from Snowflake RAW.
@@ -42,10 +45,12 @@ models:
       - name: MATCH_ID
         tests:
           - relationships:
-              to: ref('br_cricket_matches')
-              field: MATCH_ID
+              arguments:
+                to: ref('br_cricket_matches')
+                field: MATCH_ID
 
   - name: dim_date
+    description: Conformed calendar dimension.
     columns:
       - name: SK_DATE
         tests: [not_null, unique]
@@ -53,6 +58,7 @@ models:
         tests: [not_null, unique]
 
   - name: dim_team
+    description: Type 1 team dimension.
     columns:
       - name: SK_TEAM
         tests: [not_null, unique]
@@ -60,6 +66,7 @@ models:
         tests: [not_null, unique]
 
   - name: dim_venue
+    description: Type 1 venue dimension based on available VENUE_ID values.
     columns:
       - name: SK_VENUE
         tests: [not_null, unique]
@@ -67,6 +74,7 @@ models:
         tests: [not_null, unique]
 
   - name: dim_player
+    description: SCD Type 2 player dimension with tracked player attributes and effective dating.
     columns:
       - name: SK_PLAYER
         tests: [not_null, unique]
@@ -80,6 +88,7 @@ models:
         tests: [not_null]
 
   - name: dim_match
+    description: Type 1 match dimension.
     columns:
       - name: SK_MATCH
         tests: [not_null, unique]
@@ -87,6 +96,7 @@ models:
         tests: [not_null, unique]
 
   - name: fact_delivery
+    description: Ball-level fact table with one row per DELIVERY_ID.
     columns:
       - name: DELIVERY_ID
         tests: [not_null, unique]
@@ -94,29 +104,34 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_match')
-              field: MATCH_ID
+              arguments:
+                to: ref('dim_match')
+                field: MATCH_ID
       - name: TOTAL_RUNS
         tests: [not_null]
       - name: LEGAL_BALL
         tests: [not_null]
 
   - name: match_overview
+    description: Gold match and innings level performance metrics.
     columns:
       - name: MATCH_ID
         tests: [not_null]
 
   - name: player_insights
+    description: Gold player batting and bowling performance metrics.
     columns:
       - name: PLAYER_ID
         tests: [not_null]
 
   - name: team_venue_analytics
+    description: Gold team and venue performance analytics.
     columns:
       - name: TEAM_ID
         tests: [not_null]
 
   - name: phase_analytics
+    description: Gold over-phase analytics.
     columns:
       - name: MATCH_ID
         tests: [not_null]
