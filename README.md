@@ -127,5 +127,3 @@ Credentials are not committed to the repository.
 ## Technology alignment
 
 Snowflake, Snowpipe, dbt, Apache Airflow, Docker, Python/SQL, Informatica CDI, data transformation/import, data analysis and Streamlit are used where they support the project and curriculum requirements.
-
-No GenAI/Cortex implementation is included in this project.
