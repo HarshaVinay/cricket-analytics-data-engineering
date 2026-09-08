@@ -1,0 +1,14 @@
+cricket_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "<account_identifier>"
+      user: "<username>"
+      password: "<password>"
+      role: "<role>"
+      database: CRICKET_ANALYTICS
+      warehouse: CRICKET_ETL_WH
+      schema: STAGING
+      threads: 4
+      client_session_keep_alive: false
