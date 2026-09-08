@@ -1,7 +1,7 @@
 {% snapshot snap_cricket_players %}
 
 {{ config(
-    target_schema='SILVER,
+    target_schema='SILVER',
     unique_key='PLAYER_ID',
     strategy='timestamp',
     updated_at='UPDATED_AT',
