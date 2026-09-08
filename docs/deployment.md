@@ -17,8 +17,7 @@
 ## 3. dbt transformation
 
 9. Set `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` and `SNOWFLAKE_ROLE` in the execution environment.
-10. Copy `cricket_dbt/profiles.yml.example` to `profiles.yml` only when a local profile is required; the repository profile already uses environment variables.
-11. From `cricket_dbt/`, run:
+10. From `cricket_dbt/`, run:
 
 ```bash
 dbt debug --profiles-dir .
@@ -26,7 +25,8 @@ dbt snapshot --profiles-dir .
 dbt build --profiles-dir .
 ```
 
-12. Confirm the Bronze, Silver and Gold schemas contain the expected objects.
+11. Confirm the Bronze, Silver and Gold schemas contain the expected objects.
+12. Run `sql/03_dw.sql` if the P2 `DW.*` compatibility names are required. These are views over the canonical Silver objects.
 
 ## 4. Semantic and security layer
 
@@ -42,14 +42,14 @@ dbt build --profiles-dir .
 
 ## 6. Streamlit
 
-19. Configure the Streamlit Snowflake connection using the application role.
+19. Configure `streamlit_app/.streamlit/secrets.toml` from the supplied example using the application role.
 20. Start `streamlit_app/app.py`.
 21. Verify Match Overview, Player Insights, Team/Venue and Explorer pages.
 
 ## Production notes
 
 - Keep credentials out of Git.
-- Use separate DEV/TEST/PROD credentials and schemas/roles.
+- Use separate DEV/TEST/PROD credentials and roles.
 - Keep RAW restricted to ingestion/ETL roles.
 - Expose analytics applications through SEM rather than direct RAW access.
 - Move known bad files to the quarantine stage only after recording the operational audit.
