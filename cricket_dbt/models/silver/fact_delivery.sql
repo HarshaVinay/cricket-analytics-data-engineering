@@ -28,6 +28,7 @@ select
     s.BYES,
     s.LEG_BYES,
     s.TOTAL_RUNS,
+    iff(coalesce(s.WIDES,0) = 0 and coalesce(s.NO_BALLS,0) = 0, 1, 0) as LEGAL_BALL,
     s.IS_WICKET,
     s.DISMISSAL_TYPE,
     s.IS_FOUR,
