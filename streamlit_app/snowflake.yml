@@ -1,0 +1,10 @@
+definition_version: 2
+entities:
+  cricket_analytics_app:
+    type: streamlit
+    identifier: CRICKET_ANALYTICS_APP
+    query_warehouse: CRICKET_APP_WH
+    main_file: streamlit_app.py
+    artifacts:
+      - streamlit_app.py
+      - requirements.txt

@@ -1,304 +1,103 @@
-# 🏏 Cricket Analytics Data Engineering Platform
+# Cricket Analytics Platform — P2
 
-A complete end-to-end Cricket Analytics data engineering platform built using
-Snowflake, dbt, Snowpark Python, Streamlit, and Git.
+Match + ball-by-ball analytics platform built strictly to the P2 project specification.
 
----
+## Scope
 
-## 📌 Project Overview
+CSV feeds for teams, players, matches and deliveries are landed under `/landing/cricket_analytics/`.
 
-The Cricket Analytics platform ingests cricket data into Snowflake and
-transforms it into an analytical data warehouse using a star schema.
+Snowpipe loads four RAW tables. Informatica CDI performs dimension-first, fact-last transformations into a Snowflake star schema. `DIM_PLAYER` is SCD Type 2; the other dimensions are Type 1. Streamlit consumes only semantic views.
 
-The platform supports:
-
-- Match analytics
-- Player batting analytics
-- Player bowling analytics
-- Team performance analytics
-- Delivery-level analysis
-- Data quality validation
-- Incremental processing
-- Slowly Changing Dimensions
-- Snowpark transformations
-- Streamlit dashboards
-
----
-
-## 🏗️ Architecture
+## Data flow
 
 ```text
-                    Cricket CSV Data
-                           │
-                           ▼
-                  Snowflake Internal Stage
-                           │
-                           ▼
-                     RAW Layer
-                           │
-                 ┌─────────┴─────────┐
-                 │                   │
-             COPY INTO            Snowpipe
-                 │                   │
-                 └─────────┬─────────┘
-                           ▼
-                    Data Warehouse
-                           │
-                    Star Schema
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-          Dimensions                 Fact Table
-              │                         │
-              └────────────┬────────────┘
-                           ▼
-                     dbt Transformations
-                           │
-                ┌──────────┴──────────┐
-                │                     │
-          Incremental Models       Snapshots
-                │                     │
-                └──────────┬──────────┘
-                           ▼
-                    Semantic Layer
-                           │
-                           ▼
-                  Streamlit Dashboard
-🛠️ Technologies
-Technology	Purpose
-Snowflake	Cloud data warehouse
-Snowflake Stage	Data ingestion
-Snowpipe	Continuous ingestion demonstration
-Streams	Change tracking
-Tasks	Automated processing
-SQL UDF	Reusable SQL calculation
-Python UDF	Python-based calculation
-Stored Procedure	Procedural processing
-Snowpark	Python data transformation
-dbt	Transformation, testing and documentation
-Streamlit	Analytics dashboard
-Git	Version control
-📂 Project Structure
-cricket_analytics/
-│
-├── models/
-│   ├── staging/
-│   └── marts/
-│
-├── snapshots/
-│
-├── tests/
-│
-├── macros/
-│
-├── analyses/
-│
-├── seeds/
-│
-├── streamlit_app/
-│   └── app.py
-│
-├── dbt_project.yml
-├── .gitignore
-└── README.md
-📊 Source Data
+CSV Landing
+    |
+    +--> Teams --------> Snowpipe --------> RAW_TEAMS
+    +--> Players ------> Snowpipe --------> RAW_PLAYERS
+    +--> Matches ------> Snowpipe --------> RAW_MATCHES
+    +--> Deliveries ---> Snowpipe --------> RAW_DELIVERIES
+                                      |
+                                      v
+                              Informatica CDI
+                                      |
+                    +-----------------+------------------+
+                    |                                    |
+                 Dimensions                            Fact
+                    |                                    |
+          DATE / TEAM / VENUE /                   FACT_DELIVERY
+             PLAYER / MATCH                         1 row / ball
+                    +-----------------+------------------+
+                                      |
+                                      v
+                                  SEM.V_*
+                                      |
+                                      +--> Streamlit
+                                      +--> Cortex Analyst
+                                      +--> Cortex Search / RAG
+```
 
-The platform works with four cricket datasets:
+## Repository layout
 
-Teams
+- `landing/` — source CSVs, quarantine and archive folders
+- `sql/` — Snowflake setup, RAW, Snowpipe, DW, semantic, Cortex, security and DQ/OPS SQL
+- `cdi/` — Informatica CDI mapping/taskflow specifications and parameters
+- `cortex/rag_docs/` — KPI glossary, SOP, data dictionary and feed specification content
+- `streamlit_app/` — four dashboard pages
+- `tests/` — source-level validation tests
+- `docs/` — implementation notes
 
-Contains team information such as:
+## Star schema
 
-Team ID
-Team name
-Country
-Competition
-Region
-Established date
-Status
-Players
+`FACT_DELIVERY` grain: one row per `DELIVERY_ID`.
 
-Contains:
+Dimensions:
 
-Player ID
-Name
-Nationality
-Batting style
-Bowling style
-Role
-Current team
-Contract information
-Status
-Matches
+- `DIM_DATE`
+- `DIM_TEAM`
+- `DIM_VENUE`
+- `DIM_PLAYER` — SCD2
+- `DIM_MATCH`
 
-Contains:
+## Player SCD2
 
-Match ID
-Competition
-Format
-Match date
-Venue
-Teams
-Toss information
-Winner
-Result
-Deliveries
+Tracked attributes: `NATIONALITY, ROLE, BATTING_STYLE, BOWLING_STYLE, CURRENT_TEAM_ID`.
 
-Contains ball-level information including:
+`HASH_DIFF = MD5(concat of tracked attributes)`.
 
-Match
-Innings
-Over
-Ball
-Batting team
-Bowling team
-Striker
-Bowler
-Runs
-Extras
-Wickets
-Fours
-Sixes
-Dot balls
-🏢 Snowflake Data Model
-RAW Layer
-RAW_TEAMS
-RAW_PLAYERS
-RAW_MATCHES
-RAW_DELIVERIES
-DW Layer
-DIM_DATE
-DIM_TEAM
-DIM_VENUE
-DIM_PLAYER
-DIM_MATCH
-FACT_DELIVERY
+New rows are inserted as current. Changed rows expire the old version and insert a new current version. Unchanged rows are ignored.
 
-FACT_DELIVERY represents the delivery-level fact table, with one row
-representing one cricket delivery.
+## CDI
 
-🔄 SCD Type 2
+Taskflow order:
 
-DIM_PLAYER implements Slowly Changing Dimension Type 2 using:
+`DIM_DATE -> DIM_TEAM -> DIM_VENUE -> DIM_PLAYER_SCD2 -> DIM_MATCH -> FACT_DELIVERY`
 
-EFFECTIVE_FROM
-EFFECTIVE_TO
-IS_CURRENT
-UPDATED_AT
+Parameters: `$P_DB`, `$P_LOAD_DATE`, `$P_BATCH_ID`
 
-This allows historical player changes to be maintained.
+Lookups use surrogate keys and Unknown members. Router branches are new/changed/unchanged/invalid. Delivery loads are idempotent by `DELIVERY_ID`.
 
-⚙️ dbt Implementation
+## Streamlit
 
-The dbt project contains:
+Pages:
 
-Sources
+1. Match Overview
+2. Player Insights
+3. Team/Venue
+4. Explorer
 
-Four Snowflake RAW sources:
+KPIs: Total Runs, Wickets, Run Rate, Boundary %, Dot Ball %, Extras.
 
-raw_teams
-raw_players
-raw_matches
-raw_deliveries
-Staging Models
-stg_teams
-stg_players
-stg_matches
-stg_deliveries
-Mart Models
-fct_match_analytics
-mart_player_batting
-fct_deliveries_incremental
-Snapshot
-snap_players
-Data Tests
+## Cortex
 
-The project contains tests for:
+Cortex Search/RAG indexes KPI glossary, SOPs, data dictionary and feed specifications. Cortex Analyst is restricted to semantic views.
 
-Not-null constraints
-Unique keys
-Referential relationships
-🧪 dbt Validation
+## Source-data note
 
-The project has been successfully validated using:
+The supplied match feed contains `VENUE_ID` but no separate venue master file, so the implementation preserves the venue business key and provides an Unknown venue member until venue attributes are supplied. The supplied match feed also has no match score summary columns; therefore delivery-to-match-summary reconciliation is a DQ rule that reports `NOT_AVAILABLE` rather than inventing a source total.
 
-dbt build
+## Deployment
 
-Result:
+Run SQL in the order documented in `docs/deployment.md`, configure the external stage/event integration for Snowpipe, then configure the CDI connections/mappings from `cdi/`.
 
-PASS = 20
-WARN = 0
-ERROR = 0
-SKIP = 0
-TOTAL = 20
-
-The data tests were also executed independently:
-
-PASS = 12
-WARN = 0
-ERROR = 0
-SKIP = 0
-TOTAL = 12
-🧮 Snowflake Programming
-
-The project demonstrates:
-
-SQL UDF
-CALCULATE_STRIKE_RATE
-Python UDF
-CALCULATE_ECONOMY_RATE
-Stored Procedure
-PROCESS_PLAYER_CHANGES
-Snowpark
-BUILD_OVER_SUMMARY
-🔐 Security
-
-The platform includes:
-
-Role-based access control
-Analyst role
-ETL role
-Ingestion role
-Masking policy for player contract information
-🔍 Data Quality
-
-The project validates:
-
-Duplicate teams
-Duplicate players
-Duplicate matches
-Duplicate deliveries
-Deliveries without matches
-Deliveries without strikers
-Deliveries without bowlers
-📈 Streamlit Dashboard
-
-The Streamlit dashboard provides:
-
-KPI Metrics
-Total matches
-Total runs
-Total wickets
-Total sixes
-Match Analytics
-Runs by match
-Wickets by match
-Player Analytics
-Top batters
-Top bowlers
-Player performance
-Team Analytics
-Matches
-Wins
-Completed matches
-📚 Advanced Snowflake Features
-
-The project also demonstrates:
-
-Time Travel
-Zero-copy cloning
-Semi-structured JSON
-VARIANT
-FLATTEN
-Query performance analysis
-Data sharing concepts
+This project intentionally does not use dbt, Snowpark, custom UDFs, stored procedures, or unrelated curriculum labs.

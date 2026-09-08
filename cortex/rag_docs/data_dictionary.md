@@ -1,0 +1,7 @@
+# Data Dictionary
+
+FACT_DELIVERY grain: one row per DELIVERY_ID.
+
+Tracked SCD2 player attributes: NATIONALITY, ROLE, BATTING_STYLE, BOWLING_STYLE, CURRENT_TEAM_ID.
+
+Business keys: TEAM_ID, PLAYER_ID, MATCH_ID, VENUE_ID, DELIVERY_ID.

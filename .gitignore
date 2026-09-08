@@ -1,27 +1,5 @@
-# dbt generated files
-target/
-dbt_packages/
-logs/
-
-# Python
 __pycache__/
 *.pyc
-.venv/
-venv/
-
-# Environment / credentials
 .env
-.env.*
-*.pem
-*.key
-
-# Snowflake credentials
-profiles.yml
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
+.venv/
+.streamlit/secrets.toml
