@@ -1,103 +1,131 @@
 # Cricket Analytics Platform — P2
 
-Match + ball-by-ball analytics platform built strictly to the P2 project specification.
+End-to-end Match + Ball-by-Ball analytics platform built from the P2 specification and aligned with the data-engineering curriculum.
 
-## Scope
+## Purpose
 
-CSV feeds for teams, players, matches and deliveries are landed under `/landing/cricket_analytics/`.
+Ingest teams, players, matches and deliveries and enable ball-level analytics for batting, bowling, phases, venues and formats.
 
-Snowpipe loads four RAW tables. Informatica CDI performs dimension-first, fact-last transformations into a Snowflake star schema. `DIM_PLAYER` is SCD Type 2; the other dimensions are Type 1. Streamlit consumes only semantic views.
-
-## Data flow
+## Architecture
 
 ```text
-CSV Landing
-    |
-    +--> Teams --------> Snowpipe --------> RAW_TEAMS
-    +--> Players ------> Snowpipe --------> RAW_PLAYERS
-    +--> Matches ------> Snowpipe --------> RAW_MATCHES
-    +--> Deliveries ---> Snowpipe --------> RAW_DELIVERIES
-                                      |
-                                      v
-                              Informatica CDI
-                                      |
-                    +-----------------+------------------+
-                    |                                    |
-                 Dimensions                            Fact
-                    |                                    |
-          DATE / TEAM / VENUE /                   FACT_DELIVERY
-             PLAYER / MATCH                         1 row / ball
-                    +-----------------+------------------+
-                                      |
-                                      v
-                                  SEM.V_*
-                                      |
-                                      +--> Streamlit
-                                      +--> Cortex Analyst
-                                      +--> Cortex Search / RAG
+CSV Source Files
+      |
+      v
+Landing: /landing/cricket_analytics/
+      |
+      v
+Snowflake Stage
+      |
+      +--> Snowpipe --> RAW_TEAMS
+      +--> Snowpipe --> RAW_PLAYERS
+      +--> Snowpipe --> RAW_MATCHES
+      +--> Snowpipe --> RAW_DELIVERIES
+                              |
+                              v
+                       dbt Staging
+                              |
+                              v
+                 Dimensions + FACT_DELIVERY
+                              |
+                              v
+                       dbt Analytics Marts
+                              |
+                              v
+                        Streamlit App
+
+Airflow orchestrates dbt snapshot/build execution.
+Informatica CDI mapping specifications document the required dimension-then-fact taskflow.
 ```
 
-## Repository layout
+## P2 implementation
 
-- `landing/` — source CSVs, quarantine and archive folders
-- `sql/` — Snowflake setup, RAW, Snowpipe, DW, semantic, Cortex, security and DQ/OPS SQL
-- `cdi/` — Informatica CDI mapping/taskflow specifications and parameters
-- `cortex/rag_docs/` — KPI glossary, SOP, data dictionary and feed specification content
-- `streamlit_app/` — four dashboard pages
-- `tests/` — source-level validation tests
-- `docs/` — implementation notes
+- Landing folders: teams, players, matches, deliveries, quarantine and archive.
+- One Snowpipe per RAW entity with `LOAD_TS`, `FILE_NAME` and `ROW_NUMBER` metadata.
+- Star schema: `DIM_DATE`, `DIM_TEAM`, `DIM_VENUE`, `DIM_PLAYER`, `DIM_MATCH`, `FACT_DELIVERY`.
+- Fact grain: exactly one row per `DELIVERY_ID`.
+- `DIM_PLAYER` is SCD Type 2 for nationality, role, batting style, bowling style and current team.
+- Other dimensions are Type 1.
+- Unknown members are used when a dimension lookup cannot resolve a business key.
+- Idempotent delivery loading is based on `DELIVERY_ID`.
+- DQ and operational objects cover rejects, audit and validation requirements.
 
-## Star schema
+## dbt
 
-`FACT_DELIVERY` grain: one row per `DELIVERY_ID`.
+`cricket_dbt/` is the transformation layer and follows a curriculum-friendly staging → dimensions/facts → marts pattern.
 
-Dimensions:
+```text
+cricket_dbt/
+├── models/
+│   ├── staging/
+│   ├── dimensions/
+│   ├── facts/
+│   └── marts/
+├── snapshots/
+├── tests/
+├── macros/
+└── dbt_project.yml
+```
 
-- `DIM_DATE`
-- `DIM_TEAM`
-- `DIM_VENUE`
-- `DIM_PLAYER` — SCD2
-- `DIM_MATCH`
+The player SCD2 is implemented with a dbt snapshot using `PLAYER_ID` as the business key and `UPDATED_AT` as the change timestamp. The resulting dimension calculates `HASH_DIFF` from the five tracked attributes.
 
-## Player SCD2
+The incremental `FACT_DELIVERY` model preserves the one-row-per-ball grain and resolves surrogate keys to the dimensions.
 
-Tracked attributes: `NATIONALITY, ROLE, BATTING_STYLE, BOWLING_STYLE, CURRENT_TEAM_ID`.
+## Airflow
 
-`HASH_DIFF = MD5(concat of tracked attributes)`.
+`airflow/dags/cricket_dbt_pipeline.py` orchestrates the dbt workflow:
 
-New rows are inserted as current. Changed rows expire the old version and insert a new current version. Unchanged rows are ignored.
-
-## CDI
-
-Taskflow order:
-
-`DIM_DATE -> DIM_TEAM -> DIM_VENUE -> DIM_PLAYER_SCD2 -> DIM_MATCH -> FACT_DELIVERY`
-
-Parameters: `$P_DB`, `$P_LOAD_DATE`, `$P_BATCH_ID`
-
-Lookups use surrogate keys and Unknown members. Router branches are new/changed/unchanged/invalid. Delivery loads are idempotent by `DELIVERY_ID`.
+1. `dbt deps`
+2. player SCD2 snapshot
+3. `dbt build` including model and data tests
 
 ## Streamlit
 
-Pages:
+The dashboard contains the four P2 pages:
 
 1. Match Overview
 2. Player Insights
 3. Team/Venue
 4. Explorer
 
-KPIs: Total Runs, Wickets, Run Rate, Boundary %, Dot Ball %, Extras.
+Required KPIs include Total Runs, Wickets, Run Rate, Boundary %, Dot Ball % and Extras.
 
-## Cortex
+## Data-quality coverage
 
-Cortex Search/RAG indexes KPI glossary, SOPs, data dictionary and feed specifications. Cortex Analyst is restricted to semantic views.
+- Unique business keys and delivery IDs
+- Referential integrity between deliveries, matches, teams and players
+- Delivery run reconciliation
+- Ball/over completeness checks
+- Match-summary reconciliation contract
+- Schema-drift and quarantine controls
 
-## Source-data note
+The supplied match feed does not contain match-level score summary totals, so exact delivery-to-match-summary reconciliation cannot be calculated from the supplied files and must be reported as unavailable rather than fabricated.
 
-The supplied match feed contains `VENUE_ID` but no separate venue master file, so the implementation preserves the venue business key and provides an Unknown venue member until venue attributes are supplied. The supplied match feed also has no match score summary columns; therefore delivery-to-match-summary reconciliation is a DQ rule that reports `NOT_AVAILABLE` rather than inventing a source total.
+The supplied match feed contains `VENUE_ID` but there is no separate venue master feed. Venue business keys are preserved and unavailable descriptive venue attributes remain Unknown.
 
-## Deployment
+## Environments
 
-Run SQL in the order documented in `docs/deployment.md`, configure the external stage/event integration for Snowpipe, then configure the CDI connections/mappings from `cdi/`.
+CDI parameter templates are provided for DEV, TEST and PROD using:
 
-This project intentionally does not use dbt, Snowpark, custom UDFs, stored procedures, or unrelated curriculum labs.
+- `$P_DB`
+- `$P_LOAD_DATE`
+- `$P_BATCH_ID`
+
+Credentials are not committed to the repository.
+
+## Repository layout
+
+- `landing/` — supplied source feeds and landing controls
+- `sql/` — Snowflake setup, RAW, Snowpipe, warehouse, semantic, security and DQ/OPS SQL
+- `cricket_dbt/` — dbt transformations, snapshot, tests and marts
+- `cdi/` — CDI mapping/taskflow reference and environment parameters
+- `airflow/` — dbt orchestration
+- `streamlit_app/` — dashboard application
+- `tests/` — source-level validation
+- `docs/` — deployment documentation
+
+## Technology alignment
+
+Snowflake, Snowpipe, dbt, Apache Airflow, Docker, Python/SQL, Informatica CDI, data transformation/import, data analysis and Streamlit are used where they support the project and curriculum requirements.
+
+No GenAI/Cortex implementation is included in this project.
