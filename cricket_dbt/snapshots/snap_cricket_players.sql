@@ -1,7 +1,7 @@
 {% snapshot snap_cricket_players %}
 
 {{ config(
-    target_schema='DW',
+    target_schema='SILVER,
     unique_key='PLAYER_ID',
     strategy='timestamp',
     updated_at='UPDATED_AT',
@@ -19,6 +19,6 @@ select
     CURRENT_TEAM_ID,
     STATUS,
     UPDATED_AT
-from {{ ref('stg_cricket_players') }}
+from {{ ref('br_cricket_players') }}
 
 {% endsnapshot %}
