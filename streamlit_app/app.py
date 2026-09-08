@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from snowflake.snowpark.context import get_active_session
 
 st.set_page_config(page_title="Cricket Analytics Platform", page_icon="🏏", layout="wide")
 st.title("🏏 Cricket Analytics Platform")
@@ -14,10 +15,14 @@ VIEWS = {
     "delivery": "CRICKET_ANALYTICS.SEM.V_DELIVERY_EXPLORER",
 }
 
-@st.cache_data(ttl=300)
+
 def load_view(key: str) -> pd.DataFrame:
-    conn = st.connection("snowflake")
-    return conn.query(f"SELECT * FROM {VIEWS[key]}", ttl=300)
+    session = get_active_session()
+    rows = session.sql(f"SELECT * FROM {VIEWS[key]}").collect()
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame([row.as_dict() for row in rows])
+
 
 page = st.sidebar.radio("Page", ["Match Overview", "Player Insights", "Team/Venue", "Explorer"])
 
