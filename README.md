@@ -6,7 +6,7 @@ End-to-end Match + Ball-by-Ball analytics platform built from the P2 specificati
 
 Ingest teams, players, matches and deliveries and enable ball-level analytics for batting, bowling, phases, venues and formats.
 
-## Architecture
+## End-to-end architecture
 
 ```text
 CSV Source Files
@@ -15,7 +15,7 @@ CSV Source Files
 Landing: /landing/cricket_analytics/
       |
       v
-Snowflake Stage
+Snowflake Internal Stage
       |
       +--> Snowpipe --> RAW_TEAMS
       +--> Snowpipe --> RAW_PLAYERS
@@ -23,19 +23,26 @@ Snowflake Stage
       +--> Snowpipe --> RAW_DELIVERIES
                               |
                               v
-                       dbt Staging
+                         dbt Bronze
                               |
                               v
-                 Dimensions + FACT_DELIVERY
+                         dbt Silver
+                 DIM_DATE / DIM_TEAM
+                 DIM_VENUE / DIM_PLAYER
+                 DIM_MATCH / FACT_DELIVERY
                               |
                               v
-                       dbt Analytics Marts
+                          dbt Gold
+             Match / Player / Team-Venue / Phase
+                              |
+                              v
+                       SEM semantic views
                               |
                               v
                         Streamlit App
 
-Airflow orchestrates dbt snapshot/build execution.
-Informatica CDI mapping specifications document the required dimension-then-fact taskflow.
+Airflow orchestrates dbt snapshot + build.
+Informatica CDI specifications document the dimension-then-fact enterprise ETL alternative.
 ```
 
 ## P2 implementation
@@ -47,82 +54,102 @@ Informatica CDI mapping specifications document the required dimension-then-fact
 - `DIM_PLAYER` is SCD Type 2 for nationality, role, batting style, bowling style and current team.
 - Other dimensions are Type 1.
 - Unknown members are used when a dimension lookup cannot resolve a business key.
-- Idempotent delivery loading is based on `DELIVERY_ID`.
-- DQ and operational objects cover rejects, audit and validation requirements.
+- Delivery fact processing is incremental and idempotent on `DELIVERY_ID`.
+- `LEGAL_BALL` is derived so cricket run-rate, strike-rate and economy metrics use legal deliveries.
+- DQ and operational objects cover rejects, audit, validation and quarantine controls.
 
-## dbt
-
-`cricket_dbt/` is the transformation layer and follows a curriculum-friendly staging → dimensions/facts → marts pattern.
+## dbt Medallion layers
 
 ```text
 cricket_dbt/
 ├── models/
-│   ├── staging/
-│   ├── dimensions/
-│   ├── facts/
-│   └── marts/
+│   ├── bronze/
+│   │   ├── br_cricket_teams.sql
+│   │   ├── br_cricket_players.sql
+│   │   ├── br_cricket_matches.sql
+│   │   └── br_cricket_deliveries.sql
+│   ├── silver/
+│   │   ├── dim_date.sql
+│   │   ├── dim_team.sql
+│   │   ├── dim_venue.sql
+│   │   ├── dim_player.sql
+│   │   ├── dim_match.sql
+│   │   └── fact_delivery.sql
+│   └── gold/
+│       ├── match_overview.sql
+│       ├── player_insights.sql
+│       ├── team_venue_analytics.sql
+│       └── phase_analytics.sql
 ├── snapshots/
 ├── tests/
-├── macros/
 └── dbt_project.yml
 ```
 
-The player SCD2 is implemented with a dbt snapshot using `PLAYER_ID` as the business key and `UPDATED_AT` as the change timestamp. The resulting dimension calculates `HASH_DIFF` from the five tracked attributes.
+Bronze models standardize the four RAW feeds. Silver contains the conformed P2 star schema and player SCD2. Gold contains business-ready analytics models. SEM exposes a controlled interface to Streamlit.
 
-The incremental `FACT_DELIVERY` model preserves the one-row-per-ball grain and resolves surrogate keys to the dimensions.
+The player SCD2 uses `PLAYER_ID` as the business key, `UPDATED_AT` as the change timestamp, and a `HASH_DIFF` over the five tracked attributes.
 
 ## Airflow
 
-`airflow/dags/cricket_dbt_pipeline.py` orchestrates the dbt workflow:
+`airflow/dags/cricket_dbt_pipeline.py` orchestrates:
 
 1. `dbt deps`
 2. player SCD2 snapshot
-3. `dbt build` including model and data tests
+3. `dbt build` including models and tests
+
+Snowflake credentials are supplied to the Airflow container through environment variables and are not committed.
 
 ## Streamlit
 
 The dashboard contains the four P2 pages:
 
-1. Match Overview
-2. Player Insights
-3. Team/Venue
-4. Explorer
+1. Match Overview — score/run-rate/wicket metrics and filters
+2. Player Insights — top batters, strike rate, boundaries, top bowlers and economy
+3. Team/Venue — home/away and winning trends plus venue leaderboard
+4. Explorer — ball-by-ball drilldown, phase analysis and CSV export
 
 Required KPIs include Total Runs, Wickets, Run Rate, Boundary %, Dot Ball % and Extras.
 
-## Data-quality coverage
+## Data quality
 
 - Unique business keys and delivery IDs
 - Referential integrity between deliveries, matches, teams and players
 - Delivery run reconciliation
-- Ball/over completeness checks
+- Legal-ball-aware run-rate calculations
+- Ball/over completeness controls
 - Match-summary reconciliation contract
 - Schema-drift and quarantine controls
+- Operational `OPS.LOAD_AUDIT`, `OPS.REJECTS` and quarantine audit
 
-The supplied match feed does not contain match-level score summary totals, so exact delivery-to-match-summary reconciliation cannot be calculated from the supplied files and must be reported as unavailable rather than fabricated.
+The supplied match feed does not contain independent match-level score summary totals, so exact delivery-to-match-summary reconciliation is reported as unavailable rather than fabricated.
 
-The supplied match feed contains `VENUE_ID` but there is no separate venue master feed. Venue business keys are preserved and unavailable descriptive venue attributes remain Unknown.
+The supplied match feed contains `VENUE_ID` but no separate venue master feed. Venue keys are preserved and unavailable descriptive attributes remain Unknown.
 
 ## Environments
 
-CDI parameter templates are provided for DEV, TEST and PROD using:
+CDI parameter templates cover DEV, TEST and PROD using:
 
 - `$P_DB`
 - `$P_LOAD_DATE`
 - `$P_BATCH_ID`
 
-Credentials are not committed to the repository.
+The dbt profile also supports DEV/TEST/PROD through environment variables.
 
-## Repository layout
+## Deployment order
 
-- `landing/` — supplied source feeds and landing controls
-- `sql/` — Snowflake setup, RAW, Snowpipe, warehouse, semantic, security and DQ/OPS SQL
-- `cricket_dbt/` — dbt transformations, snapshot, tests and marts
-- `cdi/` — CDI mapping/taskflow reference and environment parameters
-- `airflow/` — dbt orchestration
-- `streamlit_app/` — dashboard application
-- `tests/` — source-level validation
-- `docs/` — deployment documentation
+```text
+1. sql/00_setup.sql
+2. sql/01_raw.sql
+3. sql/02_snowpipe.sql
+4. Upload the four CSV feeds to the landing stage
+5. Trigger/refresh Snowpipes as required
+6. sql/09_dq_quarantine.sql
+7. dbt snapshot
+8. dbt build
+9. sql/05_semantic.sql
+10. sql/07_security.sql
+11. Start Streamlit
+```
 
 ## Technology alignment
 
