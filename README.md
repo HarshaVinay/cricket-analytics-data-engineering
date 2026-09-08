@@ -84,7 +84,7 @@ Each pipe loads the corresponding `RAW_*` table using `ON_ERROR = CONTINUE` and 
 - `FILE_NAME`
 - `ROW_NUMBER`
 
-The validated environment uses manual `ALTER PIPE ... REFRESH` with an internal stage. Cloud `AUTO_INGEST` notification wiring remains an environment-level configuration rather than a repository requirement.
+The validated environment uses manual `ALTER PIPE ... REFRESH` with an internal stage. Cloud `AUTO_INGEST` notification wiring is an environment-level configuration.
 
 ## dbt Medallion architecture
 
@@ -120,7 +120,7 @@ SILVER.FACT_DELIVERY
 - bowling style
 - current team
 
-The SCD2 implementation uses `PLAYER_ID` as the business key, effective start/end timestamps, `IS_CURRENT`, and `HASH_DIFF` over all five tracked attributes. Delivery-to-player SCD2 key resolution uses the delivery ingestion timestamp (`LOAD_TS`) because the delivery feed does not contain a player-version event timestamp.
+The SCD2 implementation uses `PLAYER_ID` as the business key, effective start/end timestamps, `IS_CURRENT`, and `HASH_DIFF` over all five tracked attributes. Delivery-to-player SCD2 key resolution uses delivery `LOAD_TS` because the delivery feed does not contain a player-version event timestamp.
 
 Other dimensions are Type 1.
 
@@ -146,7 +146,7 @@ These models provide business-ready cricket analytics.
 - parameterization with `$P_DB`, `$P_LOAD_DATE`, `$P_BATCH_ID`
 - idempotency using `DELIVERY_ID`
 
-The runnable transformation path used for this project is dbt; CDI is maintained as the enterprise ETL design/reference layer.
+The runnable transformation path used for the project is dbt; CDI is maintained as the enterprise ETL design/reference layer.
 
 ## Analytics and Streamlit
 
@@ -197,7 +197,7 @@ ROLE_ADMIN
 
 RAW is restricted. Analyst and application access is through approved analytical/semantic objects. `OPS.LOAD_AUDIT` and `OPS.REJECTS` provide operational audit and exception tracking.
 
-The supplied cricket dataset contains no PII/PHI, so no masking policy is required for the current data; least-privilege access is implemented for the available objects.
+The supplied cricket dataset contains no PII/PHI, so the current implementation does not require a masking policy for production data. Least-privilege access is implemented for the available objects.
 
 ## Data quality
 
@@ -211,7 +211,7 @@ Implemented/validated controls include:
 - DQ reject/quarantine workflow
 - operational load audit
 
-The supplied match feed does not contain an independent match-level score summary, so a true delivery-to-match-summary reconciliation cannot be calculated from the supplied source and is documented as unavailable rather than fabricated.
+The supplied match feed does not contain an independent match-level score summary, so delivery-to-match-summary reconciliation is not applicable to the supplied source.
 
 The supplied feeds contain `VENUE_ID` but no venue master feed, so the venue dimension preserves the key and unavailable descriptive attributes are retained as Unknown.
 
@@ -229,7 +229,7 @@ player SCD2 snapshot
 dbt build (models + tests)
 ```
 
-The DAG is configured for a 30-minute cadence to support the DW refresh target. SLA performance itself is not automatically measured by the repository.
+The DAG is configured for a 30-minute cadence to support the refresh workflow.
 
 ## SQL scripts
 
@@ -270,34 +270,6 @@ The dbt project passed:
 ```
 
 The SEM layer was populated and the Snowflake-hosted Streamlit application was validated against all four dashboard areas.
-
-## P2 requirements coverage
-
-| Requirement | Status |
-|---|---|
-| Snowpipe per entity | ✅ Implemented |
-| RAW metadata | ✅ Implemented |
-| Star schema / fact grain | ✅ Implemented |
-| Player SCD2 | ✅ Implemented |
-| Type 1 dimensions | ✅ Implemented |
-| CDI dim-then-fact design | ✅ Reference implemented |
-| dbt Bronze / Silver / Gold | ✅ Implemented |
-| Streamlit dashboard | ✅ Deployed in Snowflake |
-| Core KPIs | ✅ Implemented |
-| Semantic views | ✅ Implemented |
-| RBAC / least privilege | ✅ Implemented |
-| DQ / OPS / quarantine | ✅ Implemented |
-| Airflow orchestration | ✅ Repository implementation |
-| Ingestion < 5 min SLA | ⚠️ Target documented; not automatically measured |
-| DW refresh < 30 min SLA | ⚠️ 30-minute cadence configured; not automatically measured |
-| Full ball/over completeness automation | ⚠️ Validation design present; not a comprehensive automated framework |
-| Independent match-summary reconciliation | ⚠️ Source does not provide independent summary totals |
-| True graphical heatmap | ⚠️ Phase analysis is currently presented through the Explorer phase pivot/table |
-| Cortex RAG / Cortex Analyst | ❌ Out of scope / not implemented |
-
-## Scope note
-
-This implementation intentionally excludes Cortex/RAG/Cortex Analyst because those features are not part of the implemented project scope. No Cortex functionality is required for the validated Snowflake/dbt/Streamlit P2 pipeline.
 
 ## Technology alignment
 
