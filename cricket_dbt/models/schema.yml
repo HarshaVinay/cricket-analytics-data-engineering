@@ -98,6 +98,8 @@ models:
               field: MATCH_ID
       - name: TOTAL_RUNS
         tests: [not_null]
+      - name: LEGAL_BALL
+        tests: [not_null]
 
   - name: match_overview
     columns:
