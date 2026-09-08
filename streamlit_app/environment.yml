@@ -1,0 +1,5 @@
+name: cricket_analytics_streamlit
+channels:
+  - snowflake
+dependencies:
+  - pandas
