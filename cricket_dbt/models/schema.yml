@@ -1,45 +1,120 @@
 version: 2
 
 models:
-  - name: stg_cricket_teams
+  - name: br_cricket_teams
+    description: Standardized team records from Snowflake RAW.
     columns:
       - name: TEAM_ID
         tests: [not_null, unique]
-  - name: stg_cricket_players
+
+  - name: br_cricket_players
+    description: Standardized player records from Snowflake RAW.
     columns:
       - name: PLAYER_ID
         tests: [not_null, unique]
       - name: CURRENT_TEAM_ID
         tests:
           - relationships:
-              to: ref('stg_cricket_teams')
+              to: ref('br_cricket_teams')
               field: TEAM_ID
-  - name: stg_cricket_matches
+
+  - name: br_cricket_matches
+    description: Standardized match records from Snowflake RAW.
     columns:
       - name: MATCH_ID
         tests: [not_null, unique]
       - name: TEAM_A_ID
         tests:
           - relationships:
-              to: ref('stg_cricket_teams')
+              to: ref('br_cricket_teams')
               field: TEAM_ID
       - name: TEAM_B_ID
         tests:
           - relationships:
-              to: ref('stg_cricket_teams')
+              to: ref('br_cricket_teams')
               field: TEAM_ID
-  - name: stg_cricket_deliveries
+
+  - name: br_cricket_deliveries
+    description: Standardized ball-by-ball delivery records from Snowflake RAW.
     columns:
       - name: DELIVERY_ID
         tests: [not_null, unique]
       - name: MATCH_ID
         tests:
           - relationships:
-              to: ref('stg_cricket_matches')
+              to: ref('br_cricket_matches')
               field: MATCH_ID
+
+  - name: dim_date
+    columns:
+      - name: SK_DATE
+        tests: [not_null, unique]
+      - name: DATE_VALUE
+        tests: [not_null, unique]
+
+  - name: dim_team
+    columns:
+      - name: SK_TEAM
+        tests: [not_null, unique]
+      - name: TEAM_ID
+        tests: [not_null, unique]
+
+  - name: dim_venue
+    columns:
+      - name: SK_VENUE
+        tests: [not_null, unique]
+      - name: VENUE_ID
+        tests: [not_null, unique]
+
+  - name: dim_player
+    columns:
+      - name: SK_PLAYER
+        tests: [not_null, unique]
+      - name: PLAYER_ID
+        tests: [not_null]
+      - name: EFF_START_TS
+        tests: [not_null]
+      - name: EFF_END_TS
+        tests: [not_null]
+      - name: IS_CURRENT
+        tests: [not_null]
+
+  - name: dim_match
+    columns:
+      - name: SK_MATCH
+        tests: [not_null, unique]
+      - name: MATCH_ID
+        tests: [not_null, unique]
+
   - name: fact_delivery
     columns:
       - name: DELIVERY_ID
         tests: [not_null, unique]
+      - name: MATCH_ID
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_match')
+              field: MATCH_ID
       - name: TOTAL_RUNS
+        tests: [not_null]
+
+  - name: match_overview
+    columns:
+      - name: MATCH_ID
+        tests: [not_null]
+
+  - name: player_insights
+    columns:
+      - name: PLAYER_ID
+        tests: [not_null]
+
+  - name: team_venue_analytics
+    columns:
+      - name: TEAM_ID
+        tests: [not_null]
+
+  - name: phase_analytics
+    columns:
+      - name: MATCH_ID
         tests: [not_null]
