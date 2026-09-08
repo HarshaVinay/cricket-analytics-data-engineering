@@ -1,0 +1,33 @@
+cricket_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ROLE_ETL') }}"
+      database: CRICKET_ANALYTICS
+      warehouse: CRICKET_ETL_WH
+      schema: SILVER
+      threads: 4
+    test:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ROLE_ETL') }}"
+      database: CRICKET_ANALYTICS
+      warehouse: CRICKET_ETL_WH
+      schema: SILVER
+      threads: 4
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ROLE_ETL') }}"
+      database: CRICKET_ANALYTICS
+      warehouse: CRICKET_ETL_WH
+      schema: SILVER
+      threads: 4
