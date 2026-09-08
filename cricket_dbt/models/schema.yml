@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: stg_cricket_teams
+    columns:
+      - name: TEAM_ID
+        tests: [not_null, unique]
+  - name: stg_cricket_players
+    columns:
+      - name: PLAYER_ID
+        tests: [not_null, unique]
+      - name: CURRENT_TEAM_ID
+        tests:
+          - relationships:
+              to: ref('stg_cricket_teams')
+              field: TEAM_ID
+  - name: stg_cricket_matches
+    columns:
+      - name: MATCH_ID
+        tests: [not_null, unique]
+      - name: TEAM_A_ID
+        tests:
+          - relationships:
+              to: ref('stg_cricket_teams')
+              field: TEAM_ID
+      - name: TEAM_B_ID
+        tests:
+          - relationships:
+              to: ref('stg_cricket_teams')
+              field: TEAM_ID
+  - name: stg_cricket_deliveries
+    columns:
+      - name: DELIVERY_ID
+        tests: [not_null, unique]
+      - name: MATCH_ID
+        tests:
+          - relationships:
+              to: ref('stg_cricket_matches')
+              field: MATCH_ID
+  - name: fact_delivery
+    columns:
+      - name: DELIVERY_ID
+        tests: [not_null, unique]
+      - name: TOTAL_RUNS
+        tests: [not_null]
