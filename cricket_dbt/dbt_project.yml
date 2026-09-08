@@ -1,0 +1,36 @@
+name: 'cricket_dbt'
+version: '1.0.0'
+config-version: 2
+profile: 'cricket_dbt'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+seed-paths: ["seeds"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  cricket_dbt:
+    staging:
+      +materialized: view
+      +schema: STAGING
+    dimensions:
+      +materialized: table
+      +schema: DW
+    facts:
+      +materialized: table
+      +schema: DW
+    marts:
+      +materialized: table
+      +schema: GOLD
+
+snapshots:
+  cricket_dbt:
+    +target_schema: DW
+    +strategy: timestamp
+    +updated_at: UPDATED_AT
