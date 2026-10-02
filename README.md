@@ -1,68 +1,61 @@
-# Cricket Analytics Platform — P2
+# Cricket Analytics Platform
 
-An end-to-end cricket analytics data platform built on **Snowflake, Snowpipe, dbt, Airflow, Informatica CDI design patterns, and Streamlit**. The platform ingests match and ball-by-ball data and produces curated analytics for batting, bowling, phases, teams, venues, and formats.
+An end-to-end cricket analytics data platform built with **Snowflake, Snowpipe, dbt, Apache Airflow, Informatica CDI design/reference patterns, Python, SQL, Docker, and Streamlit**.
 
-## Overview
+## What this project demonstrates
 
-The implementation uses Snowflake as the warehouse, Snowpipe for ingestion, dbt for the primary transformation path, and Streamlit as the analytics application. Medallion-style Bronze, Silver, and Gold layers provide clear separation between standardized source data, conformed warehouse data, and business-ready analytics.
+- Data ingestion from CSV source feeds into a Snowflake RAW layer
+- Snowpipe-based ingestion with source metadata and error-tolerant loading
+- dbt transformations using **Bronze, Silver, and Gold** layers
+- Dimensional modeling with fact and dimension tables
+- **SCD Type 2** handling for player attributes
+- Data-quality validation, reject/quarantine handling, and operational load auditing
+- Semantic views for controlled application access
+- Streamlit analytics for match, player, team, venue, and ball-by-ball analysis
+- Airflow orchestration of dbt snapshot/build steps
+- Role-based access design for ingestion, ETL, analytics, application, and administration
+
+## Architecture
 
 ```text
 Source CSVs
-    │
-    ▼
+    ↓
 Landing Stage
-    │
-    ▼
+    ↓
 Snowpipe
-    │
-    ▼
+    ↓
 RAW
-    │
-    ▼
-DBT BRONZE
-    │
-    ▼
-DBT SILVER
+    ↓
+dbt Bronze
+    ↓
+dbt Silver
 Dimensions + FACT_DELIVERY
-    │
-    ▼
-DBT GOLD
-Business analytics
-    │
-    ├──────────────► DW compatibility views
-    │
-    ▼
-SEM semantic views
-    │
-    ▼
-Streamlit in Snowflake
+    ↓
+dbt Gold
+Business Analytics
+    ↓
+SEM Views
+    ↓
+Streamlit
 
-Airflow ─────────► dbt snapshot + build workflow
-CDI ─────────────► enterprise ETL design/reference
+Airflow → dbt snapshot + build workflow
+CDI     → enterprise ETL design/reference
 ```
 
-## Source Data
+## Source data
 
-| Feed | Approx. rows | Purpose |
+The supplied sample contains:
+
+| Feed | Rows | Purpose |
 |---|---:|---|
-| `cricket_teams.csv` | 15 | Team master data |
-| `cricket_players.csv` | 20 | Player master and attributes |
-| `cricket_matches.csv` | 15 | Match metadata and results |
-| `cricket_deliveries.csv` | 25 | Ball-by-ball events |
+| Teams | 15 | Team master data |
+| Players | 20 | Player master data |
+| Matches | 15 | Match metadata and results |
+| Deliveries | 25 | Ball-by-ball events |
 
-Landing layout:
+The landing structure separates entity feeds and includes quarantine/archive areas.
 
-```text
-landing/cricket_analytics/
-├── teams/
-├── players/
-├── matches/
-├── deliveries/
-├── quarantine/
-└── archive/
-```
-
-## Snowflake Ingestion
+## Snowflake ingestion
 
 Four entity-specific Snowpipes load the RAW layer:
 
@@ -71,93 +64,78 @@ Four entity-specific Snowpipes load the RAW layer:
 - `PIPE_RAW_MATCHES`
 - `PIPE_RAW_DELIVERIES`
 
-The pipes use the shared CSV format, retain `LOAD_TS`, `FILE_NAME`, and `ROW_NUMBER`, and use `ON_ERROR = CONTINUE`. The validated environment uses an internal stage with manual `ALTER PIPE ... REFRESH`; cloud notification integration is environment-specific.
+The pipes retain ingestion metadata such as load timestamp, source filename, and file row number. The repository documents both manual refresh and cloud notification setup.
 
-## dbt Medallion Architecture
+## dbt data modeling
 
 ### Bronze
 
-```text
-BRONZE.BR_CRICKET_TEAMS
-BRONZE.BR_CRICKET_PLAYERS
-BRONZE.BR_CRICKET_MATCHES
-BRONZE.BR_CRICKET_DELIVERIES
-```
-
-Bronze standardizes source datatypes, preserves ingestion metadata, and derives delivery phase information.
+Bronze models standardize source datatypes, preserve ingestion metadata, and derive delivery-phase information.
 
 ### Silver
 
-```text
-SILVER.DIM_DATE
-SILVER.DIM_TEAM
-SILVER.DIM_VENUE
-SILVER.DIM_PLAYER
-SILVER.DIM_MATCH
-SILVER.FACT_DELIVERY
-```
+The Silver layer contains:
+
+- `DIM_DATE`
+- `DIM_TEAM`
+- `DIM_VENUE`
+- `DIM_PLAYER`
+- `DIM_MATCH`
+- `FACT_DELIVERY`
 
 `FACT_DELIVERY` is maintained at one row per `DELIVERY_ID`.
 
-`DIM_PLAYER` implements SCD Type 2 for nationality, role, batting style, bowling style, and current team. The dimension uses effective dating, `IS_CURRENT`, and an MD5 `HASH_DIFF` across the tracked attributes. Player surrogate-key resolution in the fact uses delivery `LOAD_TS` because the delivery feed does not contain a player-version event timestamp.
-
-Other dimensions are Type 1.
+`DIM_PLAYER` implements SCD Type 2 for tracked player attributes using effective dating, `IS_CURRENT`, and an MD5 `HASH_DIFF`.
 
 ### Gold
 
-```text
-GOLD.MATCH_OVERVIEW
-GOLD.PLAYER_INSIGHTS
-GOLD.TEAM_VENUE_ANALYTICS
-GOLD.PHASE_ANALYTICS
-```
+Gold models expose business-ready analytics:
 
-Gold models expose business-ready cricket analytics for reporting and application consumption.
+- `MATCH_OVERVIEW`
+- `PLAYER_INSIGHTS`
+- `TEAM_VENUE_ANALYTICS`
+- `PHASE_ANALYTICS`
 
-## Semantic Layer
+## Streamlit analytics
 
-The `SEM` schema is the controlled application interface:
+The Streamlit application reads from semantic views rather than querying RAW directly.
 
-```text
-SEM.V_MATCH_SUMMARY
-SEM.V_PLAYER_BATTING
-SEM.V_PLAYER_BOWLING
-SEM.V_TEAM_TRENDS
-SEM.V_VENUE_TRENDS
-SEM.V_DELIVERY_EXPLORER
-```
+### Match Overview
+- Runs, wickets, extras
+- Run rate
+- Boundary and dot-ball percentages
+- Match, team, and innings filters
 
-The Streamlit application reads these semantic views instead of querying RAW directly.
+### Player Insights
+- Batting and bowling leaderboards
+- Runs, strike rate, boundaries
+- Wickets, economy, and bowling metrics
 
-## Streamlit Dashboard
+### Team / Venue
+- Team performance
+- Winning trends
+- Venue rankings
 
-The Snowflake-hosted application provides:
-
-**Match Overview**
-- score/run metrics
-- wickets and extras
-- run rate, boundary percentage, and dot-ball percentage
-- match, team, and innings filters
-
-**Player Insights**
-- top batters and strike rate
-- boundaries
-- top bowlers
-- wickets, runs conceded, balls bowled, and economy
-
-**Team / Venue**
-- team performance
-- winning trends
-- home/away analysis
-- venue leaderboard
-
-**Explorer**
-- ball-by-ball drilldown
-- match, innings, and over-phase filters
+### Ball-by-Ball Explorer
+- Match, innings, and over-phase filters
+- Delivery-level exploration
 - CSV export
-- phase analysis
+- Phase analysis
 
-## Security and Operations
+## Data quality and operations
+
+The repository includes validation for:
+
+- Not-null and uniqueness checks
+- Referential integrity
+- Delivery/run reconciliation
+- Legal-ball-aware rate calculations
+- Reject and quarantine handling
+- Operational load auditing
+
+The dataset is sample data and does not contain PII/PHI.
+
+## Security design
 
 Roles separate ingestion, transformation, analytical, application, and administrative access:
 
@@ -169,138 +147,74 @@ ROLE_APP_STREAMLIT
 ROLE_ADMIN
 ```
 
-RAW is intentionally restricted from analyst/application roles. Operational objects include `OPS.LOAD_AUDIT`, `OPS.REJECTS`, and quarantine audit support.
+RAW access is restricted from analyst/application roles in the documented design.
 
-The supplied cricket dataset contains no PII/PHI, so masking policies are not required for the current data. Access is controlled through role-based least privilege for available objects.
+## Enterprise ETL reference
 
-## Data Quality
+The `cdi/` directory documents an Informatica CDI alternative covering:
 
-The implementation includes dbt and Snowflake validation for:
-
-- not-null constraints
-- unique business keys and `DELIVERY_ID`
-- referential integrity
-- delivery run reconciliation
-- legal-ball-aware rate calculations
-- reject and quarantine handling
-- operational load auditing
-
-The supplied match feed does not contain an independent score-summary measure, so delivery-to-match-summary reconciliation is not applicable to this dataset. Venue keys are present, but there is no separate venue master feed; unavailable descriptive attributes are retained as Unknown.
-
-## Informatica CDI Design Reference
-
-The `cdi/` directory and `sql/04_cdi_reference.sql` document the enterprise ETL alternative:
-
-- dimension-then-fact processing
-- surrogate-key lookups and Unknown members
+- Dimension-then-fact processing
+- Surrogate-key lookups
 - NEW / CHANGED / UNCHANGED / INVALID routing
-- player SCD2 handling
-- derived expressions and `HASH_DIFF`
-- `$P_DB`, `$P_LOAD_DATE`, `$P_BATCH_ID` parameters
-- `DELIVERY_ID` idempotency
+- Player SCD2 handling
+- Parameterized processing
+- Idempotency using `DELIVERY_ID`
 
-The executable transformation path used by this project is dbt; CDI is maintained as the enterprise design/reference layer.
+The executable transformation path is dbt; CDI is maintained as a design/reference layer.
 
-## Airflow Orchestration
+## Validation
 
-The repository contains an Airflow DAG that sequences:
+The repository documents the validated sample environment as:
 
-```text
-dbt deps
-   ↓
-Player SCD2 snapshot
-   ↓
-dbt build
-```
+- RAW_TEAMS: 15
+- RAW_PLAYERS: 20
+- RAW_MATCHES: 15
+- RAW_DELIVERIES: 25
+- FACT_DELIVERY: 25
+- TOTAL_RUNS: 72
+- WICKETS: 7
+- dbt build resources passed: 60/60
+- dbt data tests passed: 45/45
 
-The DAG is scheduled on a 30-minute cadence to support the target refresh frequency.
-
-## Repository Structure
+## Repository structure
 
 ```text
 cricket-analytics-data-engineering/
 ├── airflow/
-│   ├── dags/
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── requirements.txt
 ├── cdi/
 ├── cricket_dbt/
 │   ├── models/
-│   │   ├── bronze/
-│   │   ├── silver/
-│   │   └── gold/
 │   ├── snapshots/
 │   ├── tests/
-│   ├── macros/
-│   ├── dbt_project.yml
-│   ├── profiles.yml.example
-│   └── requirements.txt
+│   └── macros/
 ├── docs/
 ├── landing/
 ├── sql/
-│   ├── 00_setup.sql
-│   ├── 01_raw.sql
-│   ├── 02_snowpipe.sql
-│   ├── 03_dw.sql
-│   ├── 04_cdi_reference.sql
-│   ├── 05_semantic.sql
-│   ├── 07_security.sql
-│   ├── 08_dq_ops.sql
-│   └── 09_dq_quarantine.sql
 ├── streamlit_app/
-│   ├── app.py
-│   ├── environment.yml
-│   └── requirements.txt
 ├── tests/
 └── README.md
 ```
 
-## Deployment Sequence
+## Deployment sequence
 
 ```text
-1. sql/00_setup.sql
-2. sql/01_raw.sql
-3. sql/02_snowpipe.sql
-4. Upload the four CSV feeds to the landing stage
-5. Refresh the four Snowpipes
-6. dbt debug
-7. dbt snapshot
-8. dbt build
-9. dbt test
-10. sql/03_dw.sql
-11. sql/05_semantic.sql
-12. sql/07_security.sql
-13. sql/08_dq_ops.sql
-14. sql/09_dq_quarantine.sql
-15. Deploy Streamlit in Snowflake
+1. SQL setup
+2. RAW and Snowpipe configuration
+3. Upload source feeds
+4. Refresh Snowpipes
+5. dbt debug
+6. dbt snapshot
+7. dbt build
+8. dbt test
+9. Analytical / semantic SQL setup
+10. Security and data-quality setup
+11. Streamlit deployment
 ```
-
-`sql/04_cdi_reference.sql` documents the CDI alternative and is not a prerequisite to the dbt runtime path.
-
-## Validation
-
-The validated environment produced:
-
-```text
-RAW_TEAMS        = 15
-RAW_PLAYERS      = 20
-RAW_MATCHES      = 15
-RAW_DELIVERIES   = 25
-FACT_DELIVERY    = 25
-TOTAL_RUNS       = 72
-WICKETS          = 7
-```
-
-The dbt project completed with:
-
-```text
-60/60 build resources passed
-45/45 data tests passed
-```
-
-All six SEM views were populated and the Snowflake-hosted Streamlit application was validated across all four dashboard areas, including player batting and bowling metrics and ball-by-ball exploration.
 
 ## Technology
 
-**Snowflake · Snowpipe · dbt · Apache Airflow · Informatica CDI · Docker · Python · SQL · Streamlit**
+**Snowflake · Snowpipe · dbt · Apache Airflow · Informatica CDI · Python · SQL · Docker · Streamlit**
+
+## Author
+
+Harsha Vinay Garagaparthi
